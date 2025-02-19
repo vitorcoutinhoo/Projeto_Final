@@ -172,7 +172,7 @@ void ssd1306_draw_char(ssd1306_t *ssd, char c, uint8_t x, uint8_t y)
   
   for (uint8_t i = 0; i < 8; ++i)
   {
-    uint8_t line = font[index + i];
+    uint8_t line = font_inverted[index + i];
     for (uint8_t j = 0; j < 8; ++j)
     {
       ssd1306_pixel(ssd, x + i, y + j, line & (1 << j));
