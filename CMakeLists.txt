@@ -35,7 +35,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(final final.c )
+add_executable(final final.c lib/ssd1306.c)
 
 pico_set_program_name(final "final")
 pico_set_program_version(final "0.1")
@@ -51,12 +51,12 @@ target_link_libraries(final
 
 # Add the standard include files to the build
 target_include_directories(final PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}
+        ${CMAKE_CURRENT_LIST_DIR}/lib
 )
 
 # Add any user requested libraries
 target_link_libraries(final 
-        
+        hardware_i2c
         )
 
 pico_add_extra_outputs(final)
