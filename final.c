@@ -6,7 +6,10 @@
 
 #define VRX 27
 #define VRY 26
-#define BUTTON 22
+
+#define ABUTTON 5
+#define BBUTTON 6
+#define JBUTTON 22
 
 #define I2C_PORT i2c1
 #define I2C_SDA 14
@@ -26,53 +29,63 @@ uint8_t vrx_graph[GRAPH_WIDTH] = {0};
 uint8_t vry_graph[GRAPH_WIDTH] = {0};
 
 uint32_t volatile current = 0;
-bool volatile graph = true;
+uint8_t volatile graph = 0;
 
 void update_graph(uint8_t *graph, uint16_t value) {
     // Normaliza o valor para caber no display (invertido para gráfico ficar correto)
     uint8_t pixel_value = (HEIGHT - GRAPH_Y_OFFSET - 4) - (value * (HEIGHT - GRAPH_Y_OFFSET - 4) / 4095);
     
     // Move os pontos do gráfico para a esquerda
-    for (int i = 0; i < GRAPH_WIDTH - 1; i++) {
+    for (int i = 0; i < GRAPH_WIDTH - 1; i++) 
         graph[i] = graph[i + 1];
-    }
-    graph[GRAPH_WIDTH - 1] = pixel_value;  // Adiciona o novo valor na última posição
+
+    // Adiciona o novo valor na última posição
+    graph[GRAPH_WIDTH - 1] = pixel_value;  
 }
 
-void draw_graph(bool graph) {
+void draw_graph(uint8_t graph) {
     ssd1306_fill(&ssd, true);
     ssd1306_rect(&ssd, 1, 1, WIDTH - 2, HEIGHT - 2, false, false);
 
-    if(graph){
-        ssd1306_draw_string(&ssd, "Vrx:", 3, 4);
+    switch (graph) {
+        case 1:
+            ssd1306_draw_string(&ssd, "Vrx:", 3, 4);
 
-        // Desenha o gráfico Vrx abaixo do texto
-        for (int i = 0; i < GRAPH_WIDTH - 1; i++) 
-            ssd1306_line(&ssd, GRAPH_X_OFFSET + i, vrx_graph[i] + GRAPH_Y_OFFSET, GRAPH_X_OFFSET + i + 1, vrx_graph[i + 1] + GRAPH_Y_OFFSET, false);
-        
-    }
-    else {
-        ssd1306_draw_string(&ssd, "Vry:", 3, 4);
+            // Desenha o gráfico Vrx abaixo do texto
+            for (int i = 0; i < GRAPH_WIDTH - 1; i++) 
+                ssd1306_line(&ssd, GRAPH_X_OFFSET + i, vrx_graph[i] + GRAPH_Y_OFFSET, GRAPH_X_OFFSET + i + 1, vrx_graph[i + 1] + GRAPH_Y_OFFSET, false);
 
-        // Desenha o gráfico Vry abaixo do texto
-        for (int i = 0; i < GRAPH_WIDTH - 1; i++) 
-            ssd1306_line(&ssd, GRAPH_X_OFFSET + i, vry_graph[i] + GRAPH_Y_OFFSET, GRAPH_X_OFFSET + i + 1, vry_graph[i + 1] + GRAPH_Y_OFFSET, false);
-        
+            break;
+        case 2:
+            ssd1306_draw_string(&ssd, "Vry:", 3, 4);
+
+            // Desenha o gráfico Vry abaixo do texto
+            for (int i = 0; i < GRAPH_WIDTH - 1; i++) 
+                ssd1306_line(&ssd, GRAPH_X_OFFSET + i, vry_graph[i] + GRAPH_Y_OFFSET, GRAPH_X_OFFSET + i + 1, vry_graph[i + 1] + GRAPH_Y_OFFSET, false);
+
+            break;
     }
 
     ssd1306_send_data(&ssd);
 }
 
-void irq_graph(){
+void irq_graph(uint gpio, uint32_t event){
     uint32_t time = to_us_since_boot(get_absolute_time());
 
-    if (time - current > 250000){
+    if (time - current > 350000){
         current = time;
 
-        graph = !graph;
+        if (gpio == ABUTTON)
+            graph = 1;
+
+        if (gpio == BBUTTON)
+            graph = 2;
+        
+        if (gpio == JBUTTON)
+            graph = 0;
+        
     }
 }
-
 
 int main() {
     stdio_init_all();
@@ -81,9 +94,17 @@ int main() {
     adc_gpio_init(VRX);
     adc_gpio_init(VRY);
 
-    gpio_init(BUTTON);
-    gpio_set_dir(BUTTON, GPIO_IN);
-    gpio_pull_up(BUTTON);
+    gpio_init(ABUTTON);
+    gpio_set_dir(ABUTTON, GPIO_IN);
+    gpio_pull_up(ABUTTON);
+
+    gpio_init(BBUTTON);
+    gpio_set_dir(BBUTTON, GPIO_IN);
+    gpio_pull_up(BBUTTON);
+
+    gpio_init(JBUTTON);
+    gpio_set_dir(JBUTTON, GPIO_IN);
+    gpio_pull_up(JBUTTON);
 
     i2c_init(I2C_PORT, 400 * 1000);
     gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);
@@ -95,7 +116,9 @@ int main() {
     ssd1306_config(&ssd);
     ssd1306_send_data(&ssd);
 
-    gpio_set_irq_enabled_with_callback(BUTTON, GPIO_IRQ_EDGE_FALL, true, &irq_graph);
+    gpio_set_irq_enabled_with_callback(ABUTTON, GPIO_IRQ_EDGE_FALL, true, &irq_graph);
+    gpio_set_irq_enabled_with_callback(BBUTTON, GPIO_IRQ_EDGE_FALL, true, &irq_graph);
+    gpio_set_irq_enabled_with_callback(JBUTTON, GPIO_IRQ_EDGE_FALL, true, &irq_graph);
 
     while (true) {
         adc_select_input(1);
