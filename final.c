@@ -28,6 +28,9 @@ ssd1306_t ssd;
 uint8_t vrx_graph[GRAPH_WIDTH] = {0};  
 uint8_t vry_graph[GRAPH_WIDTH] = {0};
 
+char vrx_str[5];
+char vry_str[5];
+
 uint32_t volatile current = 0;
 uint8_t volatile graph = 0;
 
@@ -43,13 +46,27 @@ void update_graph(uint8_t *graph, uint16_t value) {
     graph[GRAPH_WIDTH - 1] = pixel_value;  
 }
 
+
+void main_screen(char* str1, char* str2){
+    ssd1306_fill(&ssd, true);
+    ssd1306_rect(&ssd, 1, 1, WIDTH - 2, HEIGHT - 2, false, false);
+    
+    ssd1306_draw_string(&ssd, "Usina Pwr", 28, 4);
+    ssd1306_hline(&ssd, 1, 126, 13, false);
+    ssd1306_vline(&ssd, 63, 13, 62, false);
+    ssd1306_draw_string(&ssd, "Vrx", 19, 16);
+    ssd1306_draw_string(&ssd, "Vry", 82, 16);
+    ssd1306_draw_string(&ssd, str1, 16, 36);
+    ssd1306_draw_string(&ssd, str2, 79, 36);
+}
+
 void draw_graph(uint8_t graph) {
     ssd1306_fill(&ssd, true);
     ssd1306_rect(&ssd, 1, 1, WIDTH - 2, HEIGHT - 2, false, false);
 
     switch (graph) {
         case 1:
-            ssd1306_draw_string(&ssd, "Vrx:", 3, 4);
+            ssd1306_draw_string(&ssd, "Vrx", 3, 4);
 
             // Desenha o gráfico Vrx abaixo do texto
             for (int i = 0; i < GRAPH_WIDTH - 1; i++) 
@@ -57,12 +74,15 @@ void draw_graph(uint8_t graph) {
 
             break;
         case 2:
-            ssd1306_draw_string(&ssd, "Vry:", 3, 4);
+            ssd1306_draw_string(&ssd, "Vry", 3, 4);
 
             // Desenha o gráfico Vry abaixo do texto
             for (int i = 0; i < GRAPH_WIDTH - 1; i++) 
                 ssd1306_line(&ssd, GRAPH_X_OFFSET + i, vry_graph[i] + GRAPH_Y_OFFSET, GRAPH_X_OFFSET + i + 1, vry_graph[i + 1] + GRAPH_Y_OFFSET, false);
 
+            break;
+        case 0:
+            main_screen(vrx_str, vry_str);
             break;
     }
 
@@ -123,9 +143,11 @@ int main() {
     while (true) {
         adc_select_input(1);
         uint16_t vrx_value = adc_read();
+        sprintf(vrx_str, "%d", vrx_value);
 
         adc_select_input(0);
         uint16_t vry_value = adc_read();
+        sprintf(vry_str, "%d", vry_value);
 
         update_graph(vrx_graph, vrx_value);
         update_graph(vry_graph, vry_value);
