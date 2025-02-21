@@ -28,16 +28,20 @@ ssd1306_t ssd;
 uint8_t vrx_graph[GRAPH_WIDTH] = {0};  
 uint8_t vry_graph[GRAPH_WIDTH] = {0};
 
-char vrx_str[5];
-char vry_str[5];
+char temp_str[6];
+char water_level_str[6];
 
 uint32_t volatile current = 0;
 uint8_t volatile graph = 0;
 
-void update_graph(uint8_t *graph, uint16_t value) {
-    // Normaliza o valor para caber no display (invertido para gráfico ficar correto)
-    uint8_t pixel_value = (HEIGHT - GRAPH_Y_OFFSET - 4) - (value * (HEIGHT - GRAPH_Y_OFFSET - 4) / 4095);
-    
+#define MIN_TEMP 200
+#define MAX_TEMP 330 * 1.15
+#define MIN_WATER_LEVEL 20
+#define MAX_WATER_LEVEL 100
+
+void update_graph(uint8_t *graph, float value, float max_value) {
+    uint8_t pixel_value = (HEIGHT - GRAPH_Y_OFFSET - 4) - ((value / max_value) * (HEIGHT - GRAPH_Y_OFFSET - 4));
+
     // Move os pontos do gráfico para a esquerda
     for (int i = 0; i < GRAPH_WIDTH - 1; i++) 
         graph[i] = graph[i + 1];
@@ -46,18 +50,22 @@ void update_graph(uint8_t *graph, uint16_t value) {
     graph[GRAPH_WIDTH - 1] = pixel_value;  
 }
 
+float map_value(uint16_t value, float min_out, float max_out) {
+    return min_out + ((float)value / 4095) * (max_out - min_out);
+}
 
 void main_screen(char* str1, char* str2){
     ssd1306_fill(&ssd, true);
     ssd1306_rect(&ssd, 1, 1, WIDTH - 2, HEIGHT - 2, false, false);
     
-    ssd1306_draw_string(&ssd, "Usina Pwr", 28, 4);
-    ssd1306_hline(&ssd, 1, 126, 13, false);
-    ssd1306_vline(&ssd, 63, 13, 62, false);
-    ssd1306_draw_string(&ssd, "Vrx", 19, 16);
-    ssd1306_draw_string(&ssd, "Vry", 82, 16);
-    ssd1306_draw_string(&ssd, str1, 16, 36);
-    ssd1306_draw_string(&ssd, str2, 79, 36);
+    ssd1306_draw_string(&ssd, "Usina Pwr", 28, 5);
+    ssd1306_hline(&ssd, 1, 126, 15, false);
+    ssd1306_vline(&ssd, 63, 15, 62, false);
+    
+    ssd1306_draw_string(&ssd, "Temp", 15, 18);
+    ssd1306_draw_string(&ssd, "H2O", 86, 18); 
+    ssd1306_draw_string(&ssd, str1, 13, 36);
+    ssd1306_draw_string(&ssd, str2, 81, 36);
 }
 
 void draw_graph(uint8_t graph) {
@@ -66,7 +74,7 @@ void draw_graph(uint8_t graph) {
 
     switch (graph) {
         case 1:
-            ssd1306_draw_string(&ssd, "Vrx", 3, 4);
+            ssd1306_draw_string(&ssd, "Temp", 3, 4);
 
             // Desenha o gráfico Vrx abaixo do texto
             for (int i = 0; i < GRAPH_WIDTH - 1; i++) 
@@ -74,7 +82,7 @@ void draw_graph(uint8_t graph) {
 
             break;
         case 2:
-            ssd1306_draw_string(&ssd, "Vry", 3, 4);
+            ssd1306_draw_string(&ssd, "H20", 3, 4);
 
             // Desenha o gráfico Vry abaixo do texto
             for (int i = 0; i < GRAPH_WIDTH - 1; i++) 
@@ -82,7 +90,7 @@ void draw_graph(uint8_t graph) {
 
             break;
         case 0:
-            main_screen(vrx_str, vry_str);
+            main_screen(temp_str, water_level_str);
             break;
     }
 
@@ -143,18 +151,20 @@ int main() {
     while (true) {
         adc_select_input(1);
         uint16_t vrx_value = adc_read();
-        sprintf(vrx_str, "%d", vrx_value);
+        float temperature = map_value(vrx_value, MIN_TEMP, MAX_TEMP);
+        snprintf(temp_str, sizeof(temp_str), "%.1fC", temperature);
 
         adc_select_input(0);
         uint16_t vry_value = adc_read();
-        sprintf(vry_str, "%d", vry_value);
+        float water_level = map_value(vry_value, MIN_WATER_LEVEL, MAX_WATER_LEVEL);
+        snprintf(water_level_str, sizeof(water_level_str), "%.1f%%", water_level);
 
-        update_graph(vrx_graph, vrx_value);
-        update_graph(vry_graph, vry_value);
+        update_graph(vrx_graph, temperature, MAX_TEMP);
+        update_graph(vry_graph, water_level, MAX_WATER_LEVEL);
 
         draw_graph(graph);
 
-        printf("vrx: %d | vry: %d\n", vrx_value, vry_value);
+        printf("Temp: %.1fC | H2O: %.1f%%\n", temperature, water_level);
         sleep_ms(100);
     }
 }
