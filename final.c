@@ -36,13 +36,17 @@ uint8_t volatile graph = 0;
 
 #define MIN_TEMP 200
 #define MAX_TEMP 330 * 1.15
+
 #define MIN_WATER_LEVEL 20
 #define MAX_WATER_LEVEL 100
 
-void update_graph(uint8_t *graph, float value, float max_value) {
-    uint8_t pixel_value = (HEIGHT - GRAPH_Y_OFFSET - 4) - ((value / max_value) * (HEIGHT - GRAPH_Y_OFFSET - 4));
+void update_graph(uint8_t *graph, float value, float min_value, float max_value) {
+    // Normaliza os valores para caber no gráfico, considerando a altura do display
+    uint8_t pixel_value = (HEIGHT - GRAPH_Y_OFFSET - 7) - ((value - min_value) / (max_value - min_value)) * (HEIGHT - GRAPH_Y_OFFSET - 7);
 
-    // Move os pontos do gráfico para a esquerda
+    if (pixel_value < 3) pixel_value = 3;
+    if (pixel_value > (HEIGHT - GRAPH_Y_OFFSET - 7)) pixel_value = HEIGHT - GRAPH_Y_OFFSET - 7;
+
     for (int i = 0; i < GRAPH_WIDTH - 1; i++) 
         graph[i] = graph[i + 1];
 
@@ -74,7 +78,8 @@ void draw_graph(uint8_t graph) {
 
     switch (graph) {
         case 1:
-            ssd1306_draw_string(&ssd, "Temp", 3, 4);
+            ssd1306_draw_string(&ssd, "Temp", 4, 5);
+            ssd1306_draw_string(&ssd, temp_str, 85, 5);
 
             // Desenha o gráfico Vrx abaixo do texto
             for (int i = 0; i < GRAPH_WIDTH - 1; i++) 
@@ -82,7 +87,8 @@ void draw_graph(uint8_t graph) {
 
             break;
         case 2:
-            ssd1306_draw_string(&ssd, "H20", 3, 4);
+            ssd1306_draw_string(&ssd, "H20", 4, 5);
+            ssd1306_draw_string(&ssd, water_level_str, 93, 5);
 
             // Desenha o gráfico Vry abaixo do texto
             for (int i = 0; i < GRAPH_WIDTH - 1; i++) 
@@ -95,6 +101,14 @@ void draw_graph(uint8_t graph) {
     }
 
     ssd1306_send_data(&ssd);
+}
+
+void irq_value(float temp, float water){
+    if (temp >= 340 || temp <= 230)
+        graph = 1;
+    
+    if (water >= 80 || water <= 40)
+        graph = 2;
 }
 
 void irq_graph(uint gpio, uint32_t event){
@@ -151,16 +165,20 @@ int main() {
     while (true) {
         adc_select_input(1);
         uint16_t vrx_value = adc_read();
+        
         float temperature = map_value(vrx_value, MIN_TEMP, MAX_TEMP);
-        snprintf(temp_str, sizeof(temp_str), "%.1fC", temperature);
+        snprintf(temp_str, sizeof(temp_str), "%.1f", temperature);
 
         adc_select_input(0);
         uint16_t vry_value = adc_read();
+        
         float water_level = map_value(vry_value, MIN_WATER_LEVEL, MAX_WATER_LEVEL);
-        snprintf(water_level_str, sizeof(water_level_str), "%.1f%%", water_level);
+        snprintf(water_level_str, sizeof(water_level_str), "%.1f%", water_level);
 
-        update_graph(vrx_graph, temperature, MAX_TEMP);
-        update_graph(vry_graph, water_level, MAX_WATER_LEVEL);
+        update_graph(vrx_graph, temperature, MIN_TEMP, MAX_TEMP);
+        update_graph(vry_graph, water_level, MIN_WATER_LEVEL, MAX_WATER_LEVEL);
+
+        irq_value(temperature, water_level);
 
         draw_graph(graph);
 
