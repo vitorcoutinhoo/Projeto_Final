@@ -39,8 +39,8 @@ ssd1306_t ssd; // Estrutura do display
 #define GRAPH_Y_OFFSET 14 // Offset vertical para evitar sobreposição
 
 // Buffers para armazenar valores dos gráficos
-uint8_t vrx_graph[GRAPH_WIDTH] = {0};  
-uint8_t vry_graph[GRAPH_WIDTH] = {0};
+uint8_t vrx_graph[GRAPH_WIDTH] = {HEIGHT / 2};  
+uint8_t vry_graph[GRAPH_WIDTH] = {HEIGHT / 2};
 char temp_str[6];
 char water_level_str[6];
 
@@ -168,7 +168,7 @@ void draw_graph(uint8_t graph) {
 
 // Função de alerta de valores críticos
 void update_alert_status(float temp, float water) {
-    bool alert = (temp >= 345 || temp <= 240) || (water >= 75 || water <= 40);
+    bool alert = (temp >= 355 || temp <= 220) || (water >= 85 || water <= 35);
     
     if (alert) {
         gpio_put(RED, alert);
@@ -267,28 +267,97 @@ int main() {
     uint offset = pio_add_program(pio, &ws2812_program);
     ws2812_program_init(pio, sm, offset, LED_MATRIX, 800000, false);
 
+    // variaveis teste
+    float temp_test = 290.0;       
+    float water_test = 60.0;       
+    float temp_step = 1.0;        
+    float water_step = 0.5;
+
+    // modo do simulador
+    uint8_t mode = 1;
+
     while (true) {
-        adc_select_input(1);
-        uint16_t vrx_value = adc_read(); // Le o valor de temperatura
+        // Tenta ler um caractere da entrada padrão sem esperar indefinidamente.
+        int input = getchar_timeout_us(0);
         
-        float temperature = map_value(vrx_value, MIN_TEMP, MAX_TEMP);
-        snprintf(temp_str, sizeof(temp_str), "%.1f", temperature);
+        // Converte caractere para número (1-5)
+        if (input != PICO_ERROR_TIMEOUT && input >= '1' && input <= '5') mode = input - '0';
 
-        adc_select_input(0);
-        uint16_t vry_value = adc_read(); // le o valor de nivel de agua
-        
-        float water_level = map_value(vry_value, MIN_WATER_LEVEL, MAX_WATER_LEVEL);
-        snprintf(water_level_str, sizeof(water_level_str), "%.1f", water_level);
+        switch (mode){
 
-        // da update nos gráficos dos 2 parâmetros
-        update_graph(vrx_graph, temperature, MIN_TEMP, MAX_TEMP);
-        update_graph(vry_graph, water_level, MIN_WATER_LEVEL, MAX_WATER_LEVEL);
-
-        // verifica se está em nivel crítico
-        update_alert_status(temperature, water_level);
-
-        // desenha o gráfico atual no display
-        draw_graph(graph);
+            // Contole das variáveis a partir do joystick
+            case 1:
+                adc_select_input(1);
+                uint16_t vrx_value = adc_read(); // Le o valor de temperatura
+                
+                float temperature = map_value(vrx_value, MIN_TEMP, MAX_TEMP);
+                snprintf(temp_str, sizeof(temp_str), "%.1f", temperature);
+    
+                adc_select_input(0);
+                uint16_t vry_value = adc_read(); // le o valor de nivel de agua
+                
+                float water_level = map_value(vry_value, MIN_WATER_LEVEL, MAX_WATER_LEVEL);
+                snprintf(water_level_str, sizeof(water_level_str), "%.1f", water_level);
+    
+                // da update nos gráficos dos 2 parâmetros
+                update_graph(vrx_graph, temperature, MIN_TEMP, MAX_TEMP);
+                update_graph(vry_graph, water_level, MIN_WATER_LEVEL, MAX_WATER_LEVEL);
+    
+                // verifica se está em nivel crítico
+                update_alert_status(temperature, water_level);
+    
+                // desenha o gráfico atual no display
+                draw_graph(graph);
+                break;
+            
+            // Simulação de temperatura normal (310°C a 280°C)
+            case 2: 
+                temp_test += temp_step;
+                if (temp_test >= 310.0 || temp_test <= 280.0) temp_step *= -1;  
+    
+                snprintf(temp_str, sizeof(temp_str), "%.1f", temp_test);
+    
+                update_graph(vrx_graph, temp_test, MIN_TEMP, MAX_TEMP);
+                update_alert_status(temp_test, water_test);
+                draw_graph(graph);
+                break;
+            
+            // Simulação de temperatura crítica (218°C a 360°C)
+            case 3: 
+                temp_test += temp_step * 2;
+                if (temp_test >= 360.0 || temp_test <= 218.0) temp_step *= -1;
+    
+                snprintf(temp_str, sizeof(temp_str), "%.1f", temp_test);
+    
+                update_graph(vrx_graph, temp_test, MIN_TEMP, MAX_TEMP);
+                update_alert_status(temp_test, water_test);
+                draw_graph(graph);
+                break;
+            
+            // Simulação de nível de água normal (50% a 70%)
+            case 4: 
+                water_test += water_step;
+                if (water_test >= 70.0 || water_test <= 50.0) water_step *= -1;
+    
+                snprintf(water_level_str, sizeof(water_level_str), "%.1f", water_test);
+    
+                update_graph(vry_graph, water_test, MIN_WATER_LEVEL, MAX_WATER_LEVEL);
+                update_alert_status(temp_test, water_test);
+                draw_graph(graph);
+                break;
+            
+            // Simulação de nível de água crítico (30% a 90%)
+            case 5: 
+                water_test += water_step * 2;
+                if (water_test >= 90.0 || water_test <= 30.0) water_step *= -1;
+    
+                snprintf(water_level_str, sizeof(water_level_str), "%.1f", water_test);
+    
+                update_graph(vry_graph, water_test, MIN_WATER_LEVEL, MAX_WATER_LEVEL);
+                update_alert_status(temp_test, water_test);
+                draw_graph(graph);
+                break;
+        }
 
         sleep_ms(100);
     }
