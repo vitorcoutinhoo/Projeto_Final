@@ -2,6 +2,8 @@
 #include "pico/stdlib.h"
 #include "hardware/adc.h"
 #include "hardware/i2c.h"
+#include "hardware/pwm.h"
+#include "ws2812.pio.h"
 #include "ssd1306.h"
 
 #define VRX 27
@@ -10,6 +12,9 @@
 #define ABUTTON 5
 #define BBUTTON 6
 #define JBUTTON 22
+
+#define GREEN 11
+#define RED 13
 
 #define I2C_PORT i2c1
 #define I2C_SDA 14
@@ -39,6 +44,33 @@ uint8_t volatile graph = 0;
 
 #define MIN_WATER_LEVEL 20
 #define MAX_WATER_LEVEL 100
+
+// Função para colocar a cor do LED na matriz
+void put_pixel(uint32_t pixel_grb) {
+    pio_sm_put_blocking(pio0, 0, pixel_grb);
+}
+
+// Função para representar a cor em formato RGB
+uint32_t color(uint8_t r, uint8_t g, uint8_t b) {
+    return ((uint32_t)(g) << 24) | ((uint32_t)(r) << 16) | ((uint32_t)(b) << 8);
+}
+
+void show_alert(){
+    uint32_t simbol[25] = {0, 1, 1, 1, 0,  0, 1, 1, 1, 0,  1, 1, 1, 1, 1,  1, 0, 1, 0, 1,  1, 1, 1, 1, 1};
+
+    for(uint i = 0; i < 25; i++){
+        if(simbol[i])
+            put_pixel(color(20, 0, 0));
+        else
+            put_pixel(0);
+    }
+}
+
+// Função para apagar o display
+void display_off(){
+    for(int i = 0; i < 25; i++)
+        put_pixel(0);
+}
 
 void update_graph(uint8_t *graph, float value, float min_value, float max_value) {
     // Normaliza os valores para caber no gráfico, considerando a altura do display
@@ -103,12 +135,30 @@ void draw_graph(uint8_t graph) {
     ssd1306_send_data(&ssd);
 }
 
+void update_led_status(float temp, float water) {
+    bool alert = (temp >= 345 || temp <= 240) || (water >= 75 || water <= 40);
+    
+    if (alert) {
+        gpio_put(RED, alert);
+        gpio_put(GREEN, !alert);
+        show_alert();
+    }
+    else{
+        gpio_put(RED, alert);
+        gpio_put(GREEN, !alert);
+        display_off();
+    }
+}
+
 void irq_value(float temp, float water){
-    if (temp >= 340 || temp <= 230)
+    
+    if (temp >= 345 || temp <= 240)
         graph = 1;
     
-    if (water >= 80 || water <= 40)
+    if (water >= 75 || water <= 40)
         graph = 2;
+
+    update_led_status(temp, water);
 }
 
 void irq_graph(uint gpio, uint32_t event){
@@ -148,6 +198,12 @@ int main() {
     gpio_set_dir(JBUTTON, GPIO_IN);
     gpio_pull_up(JBUTTON);
 
+    gpio_init(GREEN);
+    gpio_set_dir(GREEN, GPIO_OUT);
+
+    gpio_init(RED);
+    gpio_set_dir(RED, GPIO_OUT);
+
     i2c_init(I2C_PORT, 400 * 1000);
     gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);
     gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);
@@ -161,6 +217,13 @@ int main() {
     gpio_set_irq_enabled_with_callback(ABUTTON, GPIO_IRQ_EDGE_FALL, true, &irq_graph);
     gpio_set_irq_enabled_with_callback(BBUTTON, GPIO_IRQ_EDGE_FALL, true, &irq_graph);
     gpio_set_irq_enabled_with_callback(JBUTTON, GPIO_IRQ_EDGE_FALL, true, &irq_graph);
+
+    PIO pio = pio0;
+    uint sm = 0;
+
+    // Configura a máquina de estados PIO para começar a controlar os LEDs WS2812.
+    uint offset = pio_add_program(pio, &ws2812_program);
+    ws2812_program_init(pio, sm, offset, 7, 800000, false);
 
     while (true) {
         adc_select_input(1);

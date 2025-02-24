@@ -40,6 +40,8 @@ add_executable(final final.c lib/ssd1306.c)
 pico_set_program_name(final "final")
 pico_set_program_version(final "0.1")
 
+pico_generate_pio_header(final ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio OUTPUT_DIR ${CMAKE_CURRENT_LIST_DIR}/lib)
+
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(final 1)
 pico_enable_stdio_usb(final 1)
@@ -47,7 +49,8 @@ pico_enable_stdio_usb(final 1)
 # Add the standard library to the build
 target_link_libraries(final
         pico_stdlib
-        hardware_adc)
+        hardware_adc
+        hardware_pwm)
 
 # Add the standard include files to the build
 target_include_directories(final PRIVATE
@@ -57,6 +60,7 @@ target_include_directories(final PRIVATE
 # Add any user requested libraries
 target_link_libraries(final 
         hardware_i2c
+        hardware_pio
         )
 
 pico_add_extra_outputs(final)
