@@ -91,6 +91,13 @@ void init_pwm(uint gpio){
     pwm_set_enabled(slice, true);
 }
 
+// Função para gerar logs
+void log_data(float temp, float water, bool alert) {
+    uint32_t timestamp = to_ms_since_boot(get_absolute_time());
+
+    printf("[%lu ms] - Temp: %.1fC | H2O: %.1f%% | Alert: %s\n", timestamp, temp, water, alert ? "ON" : "OFF");
+}
+
 // Função para criar os gráficos
 void update_graph(uint8_t *graph, float value, float min_value, float max_value) {
     // Normaliza os valores para caber no gráfico, considerando a altura do display
@@ -181,6 +188,8 @@ void update_alert_status(float temp, float water) {
 
         display_off();
     }
+
+    log_data(temp, water, alert);
 }
 
 // interrupção pra alterar a tela do display
@@ -281,7 +290,6 @@ int main() {
         // desenha o gráfico atual no display
         draw_graph(graph);
 
-        printf("Temp: %.1fC | H2O: %.1f%%\n", temperature, water_level);
         sleep_ms(100);
     }
 }
